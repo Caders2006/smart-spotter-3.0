@@ -1,0 +1,1063 @@
+<title>SmartSpotter - AI Personal Trainer Prototype</title><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSpotter - AI Personal Trainer Prototype</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf-converter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675469404/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1629159505/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .app-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 1200px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-section {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .video-container {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .video-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .feedback-panel {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .feedback-panel h3 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #FFD700;
+        }
+
+        .form-score {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .form-feedback {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .feedback-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        .good { background: #4CAF50; }
+        .warning { background: #FF9800; }
+        .error { background: #F44336; }
+
+        .exercise-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .exercise-btn {
+            padding: 10px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .exercise-btn:hover {
+            border-color: #FFD700;
+            background: rgba(255, 215, 0, 0.2);
+        }
+
+        .exercise-btn.active {
+            border-color: #FFD700;
+            background: #FFD700;
+            color: #1a1a1a;
+        }
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .rep-counter {
+            font-size: 4em;
+            font-weight: bold;
+            text-align: center;
+            color: #4CAF50;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .camera-section {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .app-container {
+                padding: 20px;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #FFD700;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SmartSpotter</h1>
+        <p>AI-Powered Personal Trainer - Multi-Exercise Analyzer</p>
+    </div>
+
+    <div class="app-container">
+        <div class="exercise-selector">
+            <button class="exercise-btn active" data-exercise="squats">Squats</button>
+            <button class="exercise-btn" data-exercise="pushups">Push-ups</button>
+            <button class="exercise-btn" data-exercise="situps">Sit-ups</button>
+            <button class="exercise-btn" data-exercise="curls">Bicep Curls</button>
+            <button class="exercise-btn" data-exercise="bench">Bench Press</button>
+            <button class="exercise-btn" data-exercise="deadlift">Deadlifts</button>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn">Start Camera</button>
+            <button class="btn btn-secondary" id="resetBtn">Reset Stats</button>
+        </div>
+
+        <div id="loadingSection" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading AI Models...</p>
+        </div>
+
+        <div class="camera-section" id="mainSection" style="display: none;">
+            <div class="video-container">
+                <video id="videoElement" class="video-canvas" autoplay muted playsinline></video>
+                <canvas id="canvasElement" class="video-canvas" style="position: absolute; top: 0; left: 0;"></canvas>
+            </div>
+
+            <div class="feedback-panel">
+                <h3>Real-Time Analysis</h3>
+                
+                <div class="rep-counter" id="repCounter">0</div>
+                <p style="text-align: center; margin-bottom: 20px;"><span id="exerciseName">Squats</span> Completed</p>
+
+                <div class="form-score" id="formScore">
+                    <div style="font-size: 0.4em; margin-bottom: 10px;">Form Score</div>
+                    85%
+                </div>
+
+                <div class="form-feedback">
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="depthIcon"></span>
+                        <span id="depthFeedback">Analyzing squat depth...</span>
+                    </div>
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="kneeIcon"></span>
+                        <span id="kneeFeedback">Checking knee alignment...</span>
+                    </div>
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="backIcon"></span>
+                        <span id="backFeedback">Monitoring back posture...</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="avgDepth">--</div>
+                        <div class="stat-label">Avg Depth</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="formAccuracy">--</div>
+                        <div class="stat-label">Accuracy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTime">0s</div>
+                        <div class="stat-label">Session Time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SquatAnalyzer {
+            constructor() {
+                this.pose = null;
+                this.camera = null;
+                this.isAnalyzing = false;
+                this.repCount = 0;
+                this.isExercising = false;
+                this.exerciseDepth = 0;
+                this.startTime = null;
+                this.formScores = [];
+                this.lastExerciseState = 'up';
+                this.currentExercise = 'squats';
+                
+                this.initElements();
+                this.setupEventListeners();
+            }
+
+            initElements() {
+                this.videoElement = document.getElementById('videoElement');
+                this.canvasElement = document.getElementById('canvasElement');
+                this.ctx = this.canvasElement.getContext('2d');
+                this.startBtn = document.getElementById('startBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.loadingSection = document.getElementById('loadingSection');
+                this.mainSection = document.getElementById('mainSection');
+            }
+
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startAnalysis());
+                this.resetBtn.addEventListener('click', () => this.resetStats());
+                
+                // Exercise selection
+                document.querySelectorAll('.exercise-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.exercise-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.currentExercise = btn.dataset.exercise;
+                        this.updateExerciseDisplay();
+                        this.resetStats();
+                    });
+                });
+            }
+
+            updateExerciseDisplay() {
+                const exerciseNames = {
+                    'squats': 'Squats',
+                    'pushups': 'Push-ups',
+                    'situps': 'Sit-ups',
+                    'curls': 'Bicep Curls',
+                    'bench': 'Bench Press',
+                    'deadlift': 'Deadlifts'
+                };
+                
+                document.getElementById('exerciseName').textContent = exerciseNames[this.currentExercise];
+                
+                // Update feedback labels based on exercise
+                this.updateFeedbackLabels();
+            }
+
+            updateFeedbackLabels() {
+                const labels = {
+                    'squats': { depth: 'Squat depth...', knee: 'Knee alignment...', back: 'Back posture...' },
+                    'pushups': { depth: 'Push-up depth...', knee: 'Body alignment...', back: 'Core stability...' },
+                    'situps': { depth: 'Sit-up range...', knee: 'Form control...', back: 'Spine alignment...' },
+                    'curls': { depth: 'Curl range...', knee: 'Elbow position...', back: 'Body stability...' },
+                    'bench': { depth: 'Press depth...', knee: 'Bar path...', back: 'Shoulder stability...' },
+                    'deadlift': { depth: 'Lift depth...', knee: 'Hip hinge...', back: 'Spine neutral...' }
+                };
+                
+                const current = labels[this.currentExercise];
+                document.getElementById('depthFeedback').textContent = current.depth;
+                document.getElementById('kneeFeedback').textContent = current.knee;
+                document.getElementById('backFeedback').textContent = current.back;
+            }
+
+            async startAnalysis() {
+                this.loadingSection.style.display = 'block';
+                this.startBtn.disabled = true;
+                this.startBtn.textContent = 'Loading...';
+
+                try {
+                    await this.initializePose();
+                    await this.startCamera();
+                    this.startTime = Date.now();
+                    this.startTimer();
+                    this.loadingSection.style.display = 'none';
+                    this.mainSection.style.display = 'flex';
+                    this.startBtn.textContent = 'Camera Active';
+                    this.isAnalyzing = true;
+                } catch (error) {
+                    console.error('Failed to start analysis:', error);
+                    alert('Failed to start camera. Please ensure camera permissions are enabled.');
+                    this.loadingSection.style.display = 'none';
+                    this.startBtn.disabled = false;
+                    this.startBtn.textContent = 'Start Camera';
+                }
+            }
+
+            async initializePose() {
+                this.pose = new Pose({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
+                    }
+                });
+                
+                this.pose.setOptions({
+                    modelComplexity: 1,
+                    smoothLandmarks: true,
+                    enableSegmentation: false,
+                    smoothSegmentation: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                this.pose.onResults((results) => this.onPoseResults(results));
+                
+                console.log('MediaPipe Pose initialized');
+            }
+
+            async startCamera() {
+                try {
+                    // Check if camera is available
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('Camera not supported in this browser');
+                    }
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user' // Front camera
+                        } 
+                    });
+                    
+                    this.videoElement.srcObject = stream;
+                    
+                    return new Promise((resolve, reject) => {
+                        this.videoElement.onloadedmetadata = () => {
+                            this.canvasElement.width = this.videoElement.videoWidth || 640;
+                            this.canvasElement.height = this.videoElement.videoHeight || 480;
+                            
+                            // Start video playback
+                            this.videoElement.play().then(() => {
+                                this.startPoseDetection();
+                                resolve();
+                            }).catch(reject);
+                        };
+                        
+                        this.videoElement.onerror = () => {
+                            reject(new Error('Failed to load video'));
+                        };
+                    });
+                    
+                } catch (error) {
+                    console.error('Camera error:', error);
+                    
+                    // Show error message to user
+                    const errorDiv = document.createElement('div');
+                    errorDiv.innerHTML = `
+                        <div style="text-align: center; padding: 40px; background: rgba(244, 67, 54, 0.1); border-radius: 10px; margin: 20px 0;">
+                            <h3 style="color: #F44336; margin-bottom: 15px;">Camera Access Required</h3>
+                            <p style="margin-bottom: 15px;">To use SmartSpotter, please:</p>
+                            <ul style="text-align: left; max-width: 400px; margin: 0 auto;">
+                                <li>Click "Allow" when prompted for camera access</li>
+                                <li>Check that your camera isn't being used by another app</li>
+                                <li>Try refreshing the page</li>
+                                <li>Make sure you're using HTTPS (required for camera access)</li>
+                            </ul>
+                            <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 20px;">Try Again</button>
+                        </div>
+                    `;
+                    
+                    this.loadingSection.innerHTML = '';
+                    this.loadingSection.appendChild(errorDiv);
+                    this.loadingSection.style.display = 'block';
+                    
+                    throw error;
+                }
+            }
+
+            startPoseDetection() {
+                const camera = new Camera(this.videoElement, {
+                    onFrame: async () => {
+                        await this.pose.send({ image: this.videoElement });
+                    },
+                    width: 640,
+                    height: 480
+                });
+                camera.start();
+                this.isAnalyzing = true;
+            }
+
+            simulatePoseAnalysis() {
+                // Simulate realistic squat analysis
+                const time = Date.now();
+                const cycle = Math.sin(time * 0.002) * 0.5 + 0.5; // Simulate squat cycle
+                
+                // Simulate squat detection
+                const isDown = cycle < 0.3;
+                const currentState = isDown ? 'down' : 'up';
+                
+                if (this.lastSquatState === 'up' && currentState === 'down') {
+                    // Starting squat
+                    this.updateFeedback('depth', 'warning', 'Going down - maintain control');
+                } else if (this.lastSquatState === 'down' && currentState === 'up') {
+                    // Completing squat
+                    this.repCount++;
+                    this.updateRepCounter();
+                    this.updateFeedback('depth', 'good', 'Good rep! Drive through heels');
+                }
+                
+                this.lastSquatState = currentState;
+                
+                // Update form feedback with realistic variations
+                this.updateFormFeedback(cycle);
+                this.drawSkeletonOverlay(cycle);
+            }
+
+            updateFormFeedback(cycle) {
+                const depth = Math.floor((1 - cycle) * 100);
+                const kneeAlignment = 85 + Math.random() * 10;
+                const backPosture = 90 + Math.random() * 5;
+                
+                // Update depth feedback
+                if (cycle < 0.3) {
+                    this.updateFeedback('depth', 'good', `Great depth: ${depth}%`);
+                } else if (cycle < 0.7) {
+                    this.updateFeedback('depth', 'warning', 'Go deeper for full range');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Return to starting position');
+                }
+                
+                // Update knee feedback
+                if (kneeAlignment > 80) {
+                    this.updateFeedback('knee', 'good', 'Knees tracking well');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Keep knees aligned over toes');
+                }
+                
+                // Update back feedback
+                if (backPosture > 85) {
+                    this.updateFeedback('back', 'good', 'Excellent posture');
+                } else {
+                    this.updateFeedback('back', 'error', 'Keep chest up, back straight');
+                }
+                
+                // Update stats
+                document.getElementById('avgDepth').textContent = `${Math.floor(depth)}%`;
+                document.getElementById('formAccuracy').textContent = `${Math.floor((kneeAlignment + backPosture) / 2)}%`;
+                
+                // Update form score
+                const overallScore = Math.floor((depth + kneeAlignment + backPosture) / 3);
+                document.getElementById('formScore').innerHTML = `
+                    <div style="font-size: 0.4em; margin-bottom: 10px;">Form Score</div>
+                    ${overallScore}%
+                `;
+            }
+
+            updateFeedback(type, status, message) {
+                const icon = document.getElementById(`${type}Icon`);
+                const feedback = document.getElementById(`${type}Feedback`);
+                
+                icon.className = `status-icon ${status}`;
+                feedback.textContent = message;
+            }
+
+            drawSkeletonOverlay(cycle) {
+                // Draw pose estimation overlay
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 3;
+                this.ctx.fillStyle = '#FFD700';
+                
+                const width = this.canvasElement.width;
+                const height = this.canvasElement.height;
+                
+                // Simulate key points for squat analysis
+                const hipY = height * 0.45 + cycle * 50;
+                const kneeY = height * 0.65 + cycle * 40;
+                const ankleY = height * 0.85;
+                
+                // Draw skeleton points
+                const points = [
+                    { x: width * 0.5, y: height * 0.25 }, // Head
+                    { x: width * 0.5, y: height * 0.35 }, // Neck
+                    { x: width * 0.5, y: hipY },          // Hip
+                    { x: width * 0.45, y: kneeY },        // Left knee
+                    { x: width * 0.55, y: kneeY },        // Right knee
+                    { x: width * 0.42, y: ankleY },       // Left ankle
+                    { x: width * 0.58, y: ankleY },       // Right ankle
+                ];
+                
+                // Draw points
+                points.forEach(point => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
+                    this.ctx.fill();
+                });
+                
+                // Draw connections
+                this.ctx.beginPath();
+                this.ctx.moveTo(points[0].x, points[0].y);
+                this.ctx.lineTo(points[1].x, points[1].y);
+                this.ctx.lineTo(points[2].x, points[2].y);
+                this.ctx.moveTo(points[2].x, points[2].y);
+                this.ctx.lineTo(points[3].x, points[3].y);
+                this.ctx.lineTo(points[5].x, points[5].y);
+                this.ctx.moveTo(points[2].x, points[2].y);
+                this.ctx.lineTo(points[4].x, points[4].y);
+                this.ctx.lineTo(points[6].x, points[6].y);
+                this.ctx.stroke();
+            }
+
+            updateRepCounter() {
+                document.getElementById('repCounter').textContent = this.repCount;
+            }
+
+            startTimer() {
+                setInterval(() => {
+                    if (this.startTime) {
+                        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                        document.getElementById('totalTime').textContent = `${elapsed}s`;
+                    }
+                }, 1000);
+            }
+
+            resetStats() {
+                this.repCount = 0;
+                this.startTime = Date.now();
+                this.formScores = [];
+                this.updateRepCounter();
+                document.getElementById('totalTime').textContent = '0s';
+                document.getElementById('avgDepth').textContent = '--';
+                document.getElementById('formAccuracy').textContent = '--';
+            }
+
+            onPoseResults(results) {
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+                
+                // Draw the video frame
+                this.ctx.drawImage(results.image, 0, 0, this.canvasElement.width, this.canvasElement.height);
+                
+                if (results.poseLandmarks) {
+                    // Draw pose landmarks
+                    this.drawPoseLandmarks(results.poseLandmarks);
+                    
+                    // Analyze squat form
+                    this.analyzeSquatForm(results.poseLandmarks);
+                }
+            }
+
+            drawPoseLandmarks(landmarks) {
+                // Draw connections
+                const connections = [
+                    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
+                    [11, 23], [12, 24], [23, 24], // Torso
+                    [23, 25], [25, 27], [24, 26], [26, 28], // Legs
+                ];
+                
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 3;
+                
+                connections.forEach(([start, end]) => {
+                    const startPoint = landmarks[start];
+                    const endPoint = landmarks[end];
+                    
+                    if (startPoint && endPoint) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startPoint.x * this.canvasElement.width, startPoint.y * this.canvasElement.height);
+                        this.ctx.lineTo(endPoint.x * this.canvasElement.width, endPoint.y * this.canvasElement.height);
+                        this.ctx.stroke();
+                    }
+                });
+                
+                // Draw key points
+                this.ctx.fillStyle = '#FFD700';
+                const keyPoints = [11, 12, 23, 24, 25, 26, 27, 28]; // Key joints for squat analysis
+                
+                keyPoints.forEach(index => {
+                    const point = landmarks[index];
+                    if (point) {
+                        this.ctx.beginPath();
+                        this.ctx.arc(
+                            point.x * this.canvasElement.width,
+                            point.y * this.canvasElement.height,
+                            6, 0, 2 * Math.PI
+                        );
+                        this.ctx.fill();
+                    }
+                });
+            }
+
+            analyzeSquatForm(landmarks) {
+                // Route to appropriate exercise analyzer
+                switch(this.currentExercise) {
+                    case 'squats':
+                        this.analyzeSquats(landmarks);
+                        break;
+                    case 'pushups':
+                        this.analyzePushups(landmarks);
+                        break;
+                    case 'situps':
+                        this.analyzeSitups(landmarks);
+                        break;
+                    case 'curls':
+                        this.analyzeCurls(landmarks);
+                        break;
+                    case 'bench':
+                        this.analyzeBenchPress(landmarks);
+                        break;
+                    case 'deadlift':
+                        this.analyzeDeadlift(landmarks);
+                        break;
+                }
+            }
+
+            analyzeSquats(landmarks) {
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftKnee = landmarks[25];
+                const rightKnee = landmarks[26];
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                
+                if (!leftHip || !rightHip || !leftKnee || !rightKnee) return;
+                
+                const avgHipY = (leftHip.y + rightHip.y) / 2;
+                const avgKneeY = (leftKnee.y + rightKnee.y) / 2;
+                const squatDepth = Math.max(0, (avgKneeY - avgHipY) * 100);
+                
+                const kneeAngle = this.calculateAngle(leftHip, leftKnee, leftAnkle);
+                const isSquatting = squatDepth > 15;
+                
+                this.handleRepCounting(isSquatting, squatDepth, 'squat');
+                this.updateSquatFeedback(squatDepth, kneeAngle, leftHip, rightHip, leftShoulder, rightShoulder);
+            }
+
+            analyzePushups(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftElbow = landmarks[13];
+                const rightElbow = landmarks[14];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                
+                if (!leftShoulder || !rightShoulder || !leftElbow || !rightElbow) return;
+                
+                const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const avgElbowY = (leftElbow.y + rightElbow.y) / 2;
+                const pushupDepth = Math.max(0, (avgElbowY - avgShoulderY) * 100);
+                
+                const elbowAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
+                const isPushing = pushupDepth > 10;
+                
+                this.handleRepCounting(isPushing, pushupDepth, 'pushup');
+                this.updatePushupFeedback(pushupDepth, elbowAngle, leftShoulder, rightShoulder, leftHip, rightHip);
+            }
+
+            analyzeSitups(landmarks) {
+                const nose = landmarks[0];
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftKnee = landmarks[25];
+                const rightKnee = landmarks[26];
+                
+                if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return;
+                
+                const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const avgHipY = (leftHip.y + rightHip.y) / 2;
+                const situpRange = Math.max(0, (avgHipY - avgShoulderY) * 100);
+                
+                const isSittingUp = situpRange > 20;
+                
+                this.handleRepCounting(isSittingUp, situpRange, 'situp');
+                this.updateSitupFeedback(situpRange, nose, leftShoulder, rightShoulder);
+            }
+
+            analyzeCurls(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftElbow = landmarks[13];
+                const rightElbow = landmarks[14];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                
+                if (!leftShoulder || !leftElbow || !leftWrist) return;
+                
+                const elbowAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
+                const curlRange = Math.max(0, 180 - elbowAngle);
+                const isCurling = elbowAngle < 90;
+                
+                this.handleRepCounting(isCurling, curlRange, 'curl');
+                this.updateCurlFeedback(curlRange, elbowAngle, leftShoulder, leftElbow);
+            }
+
+            analyzeBenchPress(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftElbow = landmarks[13];
+                const rightElbow = landmarks[14];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                
+                if (!leftShoulder || !rightShoulder || !leftElbow || !rightElbow) return;
+                
+                const avgWristY = (leftWrist.y + rightWrist.y) / 2;
+                const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const pressDepth = Math.max(0, (avgWristY - avgShoulderY) * 100);
+                
+                const elbowAngle = this.calculateAngle(leftShoulder, leftElbow, leftWrist);
+                const isPressing = pressDepth > 15;
+                
+                this.handleRepCounting(isPressing, pressDepth, 'bench');
+                this.updateBenchFeedback(pressDepth, elbowAngle, leftShoulder, rightShoulder);
+            }
+
+            analyzeDeadlift(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftKnee = landmarks[25];
+                const rightKnee = landmarks[26];
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
+                
+                if (!leftHip || !rightHip || !leftKnee || !rightKnee) return;
+                
+                const avgHipY = (leftHip.y + rightHip.y) / 2;
+                const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                const liftRange = Math.max(0, (avgShoulderY - avgHipY) * 100);
+                
+                const hipAngle = this.calculateAngle(leftShoulder, leftHip, leftKnee);
+                const isLifting = liftRange > 20;
+                
+                this.handleRepCounting(isLifting, liftRange, 'deadlift');
+                this.updateDeadliftFeedback(liftRange, hipAngle, leftShoulder, rightShoulder, leftHip, rightHip);
+            }
+
+            handleRepCounting(isExercising, depth, exerciseType) {
+                const currentState = isExercising ? 'down' : 'up';
+                
+                if (this.lastExerciseState === 'up' && currentState === 'down') {
+                    this.isExercising = true;
+                    this.updateFeedback('depth', 'warning', `${exerciseType} in progress...`);
+                } else if (this.lastExerciseState === 'down' && currentState === 'up' && depth < 5) {
+                    this.repCount++;
+                    this.updateRepCounter();
+                    this.updateFeedback('depth', 'good', 'Rep completed! Great work!');
+                    this.isExercising = false;
+                }
+                
+                this.lastExerciseState = currentState;
+            }
+
+            calculateAngle(pointA, pointB, pointC) {
+                const radians = Math.atan2(pointC.y - pointB.y, pointC.x - pointB.x) - 
+                               Math.atan2(pointA.y - pointB.y, pointA.x - pointB.x);
+                let angle = Math.abs(radians * 180.0 / Math.PI);
+                if (angle > 180.0) {
+                    angle = 360 - angle;
+                }
+                return angle;
+            }
+
+            updateFormFeedback(depth, kneeAngle, leftHip, rightHip, leftShoulder, rightShoulder) {
+                this.updateSquatFeedback(depth, kneeAngle, leftHip, rightHip, leftShoulder, rightShoulder);
+            }
+
+            updateSquatFeedback(depth, kneeAngle, leftHip, rightHip, leftShoulder, rightShoulder) {
+                if (depth > 25) {
+                    this.updateFeedback('depth', 'good', `Great depth: ${Math.floor(depth)}%`);
+                } else if (depth > 15) {
+                    this.updateFeedback('depth', 'warning', 'Go deeper for full range');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                if (kneeAngle > 70 && kneeAngle < 120) {
+                    this.updateFeedback('knee', 'good', 'Good knee alignment');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Watch knee tracking');
+                }
+                
+                const backAngle = Math.abs(leftShoulder.y - leftHip.y) * 100;
+                if (backAngle < 20) {
+                    this.updateFeedback('back', 'good', 'Excellent posture');
+                } else {
+                    this.updateFeedback('back', 'warning', 'Keep chest up');
+                }
+                
+                this.updateStats(Math.floor(depth), Math.floor((kneeAngle + (100-backAngle)) / 2));
+            }
+
+            updatePushupFeedback(depth, elbowAngle, leftShoulder, rightShoulder, leftHip, rightHip) {
+                if (depth > 20) {
+                    this.updateFeedback('depth', 'good', `Good depth: ${Math.floor(depth)}%`);
+                } else if (depth > 10) {
+                    this.updateFeedback('depth', 'warning', 'Go lower for full range');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                if (elbowAngle > 45 && elbowAngle < 90) {
+                    this.updateFeedback('knee', 'good', 'Good body alignment');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Keep body straight');
+                }
+                
+                const bodyAlignment = Math.abs((leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2) * 100;
+                if (bodyAlignment < 10) {
+                    this.updateFeedback('back', 'good', 'Perfect plank position');
+                } else {
+                    this.updateFeedback('back', 'warning', 'Keep core tight');
+                }
+                
+                this.updateStats(Math.floor(depth), Math.floor((elbowAngle + (100-bodyAlignment)) / 2));
+            }
+
+            updateSitupFeedback(range, angle, nose, leftShoulder, rightShoulder) {
+                if (range > 30) {
+                    this.updateFeedback('depth', 'good', `Great range: ${Math.floor(range)}%`);
+                } else if (range > 20) {
+                    this.updateFeedback('depth', 'warning', 'Come up higher');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                this.updateFeedback('knee', 'good', 'Control the movement');
+                this.updateFeedback('back', 'good', 'Good spine alignment');
+                
+                this.updateStats(Math.floor(range), 85);
+            }
+
+            updateCurlFeedback(range, elbowAngle, leftShoulder, leftElbow) {
+                if (range > 60) {
+                    this.updateFeedback('depth', 'good', `Full range: ${Math.floor(range)}°`);
+                } else if (range > 30) {
+                    this.updateFeedback('depth', 'warning', 'Curl higher for full range');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                const elbowStability = Math.abs(leftElbow.x - leftShoulder.x) * 100;
+                if (elbowStability < 10) {
+                    this.updateFeedback('knee', 'good', 'Elbows stable');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Keep elbows at sides');
+                }
+                
+                this.updateFeedback('back', 'good', 'Good posture');
+                
+                this.updateStats(Math.floor(range), Math.floor((range + (100-elbowStability)) / 2));
+            }
+
+            updateBenchFeedback(depth, elbowAngle, leftShoulder, rightShoulder) {
+                if (depth > 25) {
+                    this.updateFeedback('depth', 'good', `Good depth: ${Math.floor(depth)}%`);
+                } else if (depth > 15) {
+                    this.updateFeedback('depth', 'warning', 'Lower the bar more');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                this.updateFeedback('knee', 'good', 'Good bar path');
+                this.updateFeedback('back', 'good', 'Shoulders stable');
+                
+                this.updateStats(Math.floor(depth), 88);
+            }
+
+            updateDeadliftFeedback(range, hipAngle, leftShoulder, rightShoulder, leftHip, rightHip) {
+                if (range > 25) {
+                    this.updateFeedback('depth', 'good', `Good lift: ${Math.floor(range)}%`);
+                } else if (range > 15) {
+                    this.updateFeedback('depth', 'warning', 'Full hip extension');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Starting position');
+                }
+                
+                if (hipAngle > 160 && hipAngle < 200) {
+                    this.updateFeedback('knee', 'good', 'Good hip hinge');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Focus on hip movement');
+                }
+                
+                const backAlignment = Math.abs((leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2) * 100;
+                if (backAlignment > 15) {
+                    this.updateFeedback('back', 'good', 'Spine neutral');
+                } else {
+                    this.updateFeedback('back', 'warning', 'Keep back straight');
+                }
+                
+                this.updateStats(Math.floor(range), Math.floor((hipAngle + (100-backAlignment)) / 2));
+            }
+
+            updateStats(depth, accuracy) {
+                document.getElementById('avgDepth').textContent = `${depth}%`;
+                document.getElementById('formAccuracy').textContent = `${accuracy}%`;
+                
+                const overallScore = Math.floor((depth + accuracy) / 2);
+                document.getElementById('formScore').innerHTML = `
+                    <div style="font-size: 0.4em; margin-bottom: 10px;">Form Score</div>
+                    ${overallScore}%
+                `;
+            }
+        }
+
+        // Initialize the app
+        const squatAnalyzer = new SquatAnalyzer();
+    </script>
+</body>
+</html>
